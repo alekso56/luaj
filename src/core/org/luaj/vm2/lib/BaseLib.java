@@ -78,7 +78,6 @@ import org.luaj.vm2.Varargs;
 public class BaseLib extends TwoArgFunction implements ResourceFinder {
 	
 	Globals globals;
-	
 
 	/** Perform one-time initialization on the library by adding base functions
 	 * to the supplied environment, and returning it as the return value.
@@ -113,8 +112,8 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 
 		next next;
 		env.set("next", next = new next());
-		env.set("pairs", new pairs(next));
-		env.set("ipairs", new ipairs());
+		env.set("pairs", new pairsbase(PAIRS, NIL, next));
+		env.set("ipairs", new pairsbase(IPAIRS, ZERO, new inext()));
 		
 		return env;
 	}
@@ -152,7 +151,7 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 				System.gc();
 				return LuaValue.TRUE;
 			} else {
-				argerror(1, "invalid option '" + s + "'");
+				this.argerror("gc op");
 			}
 			return NIL;
 		}
@@ -173,16 +172,16 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 	// "error", // ( message [,level] ) -> ERR
 	static final class error extends TwoArgFunction {
 		public LuaValue call(LuaValue arg1, LuaValue arg2) {
-			if (arg1.isnil()) throw new LuaError(NIL);
-			if (!arg1.isstring() || arg2.optint(1) == 0) throw new LuaError(arg1);
-			throw new LuaError(arg1.tojstring(), arg2.optint(1));
+			throw arg1.isnil()? new LuaError(null, arg2.optint(1)):
+				arg1.isstring()? new LuaError(arg1.tojstring(), arg2.optint(1)):
+					new LuaError(arg1);
 		}
 	}
 
 	// "getmetatable", // ( object ) -> table
 	static final class getmetatable extends LibFunction {
 		public LuaValue call() {
-			return argerror(1, "value expected");
+			return argerror(1, "value");
 		}
 		public LuaValue call(LuaValue arg) {
 			LuaValue mt = arg.getmetatable();
@@ -193,9 +192,7 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 	final class load extends VarArgFunction {
 		public Varargs invoke(Varargs args) {
 			LuaValue ld = args.arg1();
-			if (!ld.isstring() && !ld.isfunction()) {
-				throw new LuaError("bad argument #1 to 'load' (string or function expected, got " + ld.typename() + ")");
-			}
+			args.argcheck(ld.isstring() || ld.isfunction(), 1, "ld must be string or function");
 			String source = args.optjstring(2, ld.isstring()? ld.tojstring(): "=(load)");
 			String mode = args.optjstring(3, "bt");
 			LuaValue env = args.optvalue(4, globals);
@@ -260,10 +257,10 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 	// "rawequal", // (v1, v2) -> boolean
 	static final class rawequal extends LibFunction {
 		public LuaValue call() {
-			return argerror(1, "value expected");
+			return argerror(1, "value");
 		}
 		public LuaValue call(LuaValue arg) {
-			return argerror(2, "value expected");
+			return argerror(2, "value");
 		}
 		public LuaValue call(LuaValue arg1, LuaValue arg2) {
 			return valueOf(arg1.raweq(arg2));
@@ -271,9 +268,12 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 	}
 
 	// "rawget", // (table, index) -> value
-	static final class rawget extends TableLibFunction {
+	static final class rawget extends LibFunction {
+		public LuaValue call() {
+			return argerror(1, "value");
+		}
 		public LuaValue call(LuaValue arg) {
-			return argerror(2, "value expected");
+			return argerror(2, "value");
 		}
 		public LuaValue call(LuaValue arg1, LuaValue arg2) {
 			return arg1.checktable().rawget(arg2);
@@ -289,16 +289,16 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 	}
 
 	// "rawset", // (table, index, value) -> table
-	static final class rawset extends TableLibFunction {
+	static final class rawset extends LibFunction {
 		public LuaValue call(LuaValue table) {
-			return argerror(2,"value expected");
+			return argerror(2,"value");
 		}
 		public LuaValue call(LuaValue table, LuaValue index) {
-			return argerror(3,"value expected");
+			return argerror(3,"value");
 		}
 		public LuaValue call(LuaValue table, LuaValue index, LuaValue value) {
 			LuaTable t = table.checktable();
-			if (!index.isvalidkey()) argerror(2, "table index is nil");
+			if (!index.isvalidkey()) argerror(2, "value");
 			t.rawset(index, value);
 			return t;
 		}
@@ -318,9 +318,9 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 	}
 	
 	// "setmetatable", // (table, metatable) -> table
-	static final class setmetatable extends TableLibFunction {
+	static final class setmetatable extends LibFunction {
 		public LuaValue call(LuaValue table) {
-			return argerror(2,"nil or table expected");
+			return argerror(2,"value");
 		}
 		public LuaValue call(LuaValue table, LuaValue metatable) {
 			final LuaValue mt0 = table.checktable().getmetatable();
@@ -349,8 +349,11 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 	static final class tostring extends LibFunction {
 		public LuaValue call(LuaValue arg) {
 			LuaValue h = arg.metatag(TOSTRING);
-			if ( ! h.isnil() )
-				return h.call(arg);
+			if ( ! h.isnil() ) {
+				LuaValue v = h.call(arg);
+				LuaValue vs = v.tostring();
+				return !vs.isnil() ? vs : v;
+			}
 			LuaValue v = arg.tostring();
 			if ( ! v.isnil() )
 				return v;
@@ -391,23 +394,26 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 			}
 		}
 	}
-	
-	// "pairs" (t) -> iter-func, t, nil
-	static final class pairs extends VarArgFunction {
-		final next next;
-		pairs(next next) {
-			this.next = next;
+
+	// pairsbase, // (t) -> iter-func, t, initial
+	static final class pairsbase extends VarArgFunction {
+		final LuaString method;
+		final LuaValue initial;
+		final VarArgFunction iter;
+
+		pairsbase(LuaString method, LuaValue initial, VarArgFunction iter) {
+			this.method = method;
+			this.initial = initial;
+			this.iter = iter;
 		}
+
 		public Varargs invoke(Varargs args) {
-				return varargsOf( next, args.checktable(1), NIL );
-		}
-	}
-	
-	// // "ipairs", // (t) -> iter-func, t, 0
-	static final class ipairs extends VarArgFunction {
-		inext inext = new inext();
-		public Varargs invoke(Varargs args) {
-			return varargsOf( inext, args.checktable(1), ZERO );
+			LuaValue arg = args.arg1();
+			LuaValue t = arg.metatag(method);
+			if (!t.isnil())
+				// TODO: This can return more than 3 results.
+				return t.invoke(args.isvalue(1) ? arg : t);
+			return varargsOf(iter, args.checktable(1), initial);
 		}
 	}
 	
@@ -465,12 +471,10 @@ public class BaseLib extends TwoArgFunction implements ResourceFinder {
 			this.func = func;
 		}
 		public int read() throws IOException {
-			if ( remaining < 0 )
-				return -1;
-			if ( remaining == 0 ) {
+			if ( remaining <= 0 ) {
 				LuaValue s = func.call();
 				if ( s.isnil() )
-					return remaining = -1;
+					return -1;
 				LuaString ls = s.strvalue();
 				bytes = ls.m_bytes;
 				offset = ls.m_offset;

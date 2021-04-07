@@ -21,21 +21,22 @@
 ******************************************************************************/
 package org.luaj.vm2;
 
+import org.luaj.vm2.compat.JavaCompat;
 import org.luaj.vm2.lib.MathLib;
 
 /**
- * Extension of {@link LuaNumber} which can hold a Java double as its value.
+ * Extension of {@link LuaNumber} which can hold a Java double as its value. 
  * <p>
- * These instance are not instantiated directly by clients, but indirectly
+ * These instance are not instantiated directly by clients, but indirectly 
  * via the static functions {@link LuaValue#valueOf(int)} or {@link LuaValue#valueOf(double)}
- * functions.  This ensures that values which can be represented as int
- * are wrapped in {@link LuaInteger} instead of {@link LuaDouble}.
+ * functions.  This ensures that values which can be represented as int 
+ * are wrapped in {@link LuaInteger} instead of {@link LuaDouble}.  
  * <p>
  * Almost all API's implemented in LuaDouble are defined and documented in {@link LuaValue}.
  * <p>
- * However the constants {@link #NAN}, {@link #POSINF}, {@link #NEGINF},
- * {@link #JSTR_NAN}, {@link #JSTR_POSINF}, and {@link #JSTR_NEGINF} may be useful
- * when dealing with Nan or Infinite values.
+ * However the constants {@link #NAN}, {@link #NEGNAN}, {@link #POSINF}, {@link #NEGINF},
+ * {@link #JSTR_NAN}, {@link #JSTR_NEGNAN}, {@link #JSTR_POSINF}, and {@link #JSTR_NEGINF} may be useful
+ * when dealing with Nan or Infinite values. 
  * <p>
  * LuaDouble also defines functions for handling the unique math rules of lua devision and modulo in
  * <ul>
@@ -43,7 +44,7 @@ import org.luaj.vm2.lib.MathLib;
  * <li>{@link #ddiv_d(double, double)}</li>
  * <li>{@link #dmod(double, double)}</li>
  * <li>{@link #dmod_d(double, double)}</li>
- * </ul>
+ * </ul> 
  * <p>
  * @see LuaValue
  * @see LuaNumber
@@ -55,7 +56,10 @@ public class LuaDouble extends LuaNumber {
 
 	/** Constant LuaDouble representing NaN (not a number) */
 	public static final LuaDouble NAN    = new LuaDouble( Double.NaN );
-	
+
+	/** Constant LuaDouble representing negative NaN (not a number) */
+	public static final LuaDouble NEGNAN    = new LuaDouble( -Double.NaN );
+
 	/** Constant LuaDouble representing positive infinity */
 	public static final LuaDouble POSINF = new LuaDouble( Double.POSITIVE_INFINITY );
 	
@@ -64,7 +68,10 @@ public class LuaDouble extends LuaNumber {
 	
 	/** Constant String representation for NaN (not a number), "nan" */
 	public static final String JSTR_NAN    = "nan";
-	
+
+	/** Constant String representation for negative NaN (not a number), "-nan" */
+	public static final String JSTR_NEGNAN    = "-nan";
+
 	/** Constant String representation for positive infinity, "inf" */
 	public static final String JSTR_POSINF = "inf";
 
@@ -90,7 +97,7 @@ public class LuaDouble extends LuaNumber {
 	}
 	
 	public boolean islong() {
-		return v == (long) v;
+		return v == (long) v; 
 	}
 	
 	public byte    tobyte()        { return (byte) (long) v; }
@@ -151,12 +158,12 @@ public class LuaDouble extends LuaNumber {
 	/** Divide two double numbers according to lua math, and return a {@link LuaValue} result.
 	 * @param lhs Left-hand-side of the division.
 	 * @param rhs Right-hand-side of the division.
-	 * @return {@link LuaValue} for the result of the division,
+	 * @return {@link LuaValue} for the result of the division, 
 	 * taking into account positive and negiative infinity, and Nan
-	 * @see #ddiv_d(double, double)
+	 * @see #ddiv_d(double, double) 
 	 */
 	public static LuaValue ddiv(double lhs, double rhs) {
-		return rhs!=0? valueOf( lhs / rhs ): lhs>0? POSINF: lhs==0? NAN: NEGINF;
+		return rhs!=0? valueOf( lhs / rhs ): lhs>0? POSINF: lhs==0? NAN: NEGINF;	
 	}
 	
 	/** Divide two double numbers according to lua math, and return a double result.
@@ -166,15 +173,15 @@ public class LuaDouble extends LuaNumber {
 	 * @see #ddiv(double, double)
 	 */
 	public static double ddiv_d(double lhs, double rhs) {
-		return rhs!=0? lhs / rhs: lhs>0? Double.POSITIVE_INFINITY: lhs==0? Double.NaN: Double.NEGATIVE_INFINITY;
+		return rhs!=0? lhs / rhs: lhs>0? Double.POSITIVE_INFINITY: lhs==0? Double.NaN: Double.NEGATIVE_INFINITY;	
 	}
 	
 	/** Take modulo double numbers according to lua math, and return a {@link LuaValue} result.
 	 * @param lhs Left-hand-side of the modulo.
 	 * @param rhs Right-hand-side of the modulo.
-	 * @return {@link LuaValue} for the result of the modulo,
+	 * @return {@link LuaValue} for the result of the modulo, 
 	 * using lua's rules for modulo
-	 * @see #dmod_d(double, double)
+	 * @see #dmod_d(double, double) 
 	 */
 	public static LuaValue dmod(double lhs, double rhs) {
 		if (rhs == 0 || lhs == Double.POSITIVE_INFINITY || lhs == Double.NEGATIVE_INFINITY) return NAN;
@@ -190,7 +197,7 @@ public class LuaDouble extends LuaNumber {
 	/** Take modulo for double numbers according to lua math, and return a double result.
 	 * @param lhs Left-hand-side of the modulo.
 	 * @param rhs Right-hand-side of the modulo.
-	 * @return double value for the result of the modulo,
+	 * @return double value for the result of the modulo, 
 	 * using lua's rules for modulo
 	 * @see #dmod(double, double)
 	 */
@@ -235,18 +242,14 @@ public class LuaDouble extends LuaNumber {
 	public int strcmp( LuaString rhs )      { typerror("attempt to compare number with string"); return 0; }
 			
 	public String tojstring() {
-		/*
-		if ( v == 0.0 ) { // never occurs in J2me
-			long bits = Double.doubleToLongBits( v );
-			return ( bits >> 63 == 0 ) ? "0" : "-0";
-		}
-		*/
+		if ( v == 0.0 ) // never occurs on J2ME
+			return (JavaCompat.INSTANCE.doubleToRawLongBits(v)<0? "-0": "0");
 		long l = (long) v;
-		if ( l == v )
+		if ( l == v ) 
 			return Long.toString(l);
 		if ( Double.isNaN(v) )
-			return JSTR_NAN;
-		if ( Double.isInfinite(v) )
+			return (JavaCompat.INSTANCE.doubleToRawLongBits(v)<0? JSTR_NEGNAN: JSTR_NAN);
+		if ( Double.isInfinite(v) ) 
 			return (v<0? JSTR_NEGINF: JSTR_POSINF);
 		return Float.toString((float)v);
 	}
@@ -268,11 +271,11 @@ public class LuaDouble extends LuaNumber {
 	}
 	
 	public LuaNumber optnumber(LuaNumber defval) {
-		return this;
+		return this; 
 	}
 	
 	public boolean isnumber() {
-		return true;
+		return true; 
 	}
 	
 	public boolean isstring() {
@@ -287,14 +290,14 @@ public class LuaDouble extends LuaNumber {
 	public LuaNumber checknumber()       { return this; }
 	public double checkdouble()          { return v; }
 	
-	public String checkjstring() {
+	public String checkjstring() { 
 		return tojstring();
 	}
-	public LuaString checkstring() {
+	public LuaString checkstring() { 
 		return LuaString.valueOf(tojstring());
 	}
 	
 	public boolean isvalidkey() {
 		return !Double.isNaN(v);
-	}
+	}	
 }
